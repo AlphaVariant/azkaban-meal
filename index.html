@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Azkaban Meal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --paper:#F4EFE3; --card:#FCFAF4; --card-2:#F8F3E8;
+    --ink:#1A2620; --ink-soft:#5E574A; --muted:#8A8270;
+    --green:#1E5B3C; --green-deep:#143E2A; --green-soft:#E7EFE6;
+    --brass:#8A6D12; --brass-soft:#B89530;
+    --brick:#9E3A2A; --brick-soft:#F2E2DC;
+    --line:#E2D8C4; --line-strong:#CBBFA6;
+    --shadow:0 1px 2px rgba(26,38,32,.06),0 6px 18px rgba(26,38,32,.05);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--paper);color:var(--ink);font-family:'Inter',system-ui,sans-serif;font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  h1,h2,h3{font-family:'Space Grotesk',sans-serif;letter-spacing:-.01em}
+  .mono{font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}
+  .num{font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;text-align:right}
+  a{color:var(--green)}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 18px 80px}
+  /* auth */
+  .auth-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+  .auth-card{background:var(--card);border:1px solid var(--line-strong);border-radius:18px;box-shadow:var(--shadow);padding:30px;max-width:380px;width:100%}
+  .auth-card .seal{width:40px;height:40px;border-radius:9px;background:var(--green);color:#F4EFE3;display:grid;place-items:center;font-family:'Space Grotesk';font-weight:700;font-size:15px;margin-bottom:14px}
+  .auth-card h1{font-size:22px;margin:0 0 4px}
+  .auth-card p.sub{font-size:13px;color:var(--ink-soft);margin:0 0 20px}
+  .auth-card label{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600;display:block;margin:12px 0 5px}
+  .auth-card input{width:100%;font-family:'Inter';font-size:14px;padding:10px 12px;border:1px solid var(--line-strong);border-radius:9px;background:#fff;color:var(--ink)}
+  .auth-card input:focus{outline:2px solid var(--green);border-color:var(--green)}
+  .auth-card .btn-primary{width:100%;margin-top:18px;padding:11px}
+  .auth-msg{font-size:13px;margin-top:12px;min-height:18px}
+  .auth-msg.err{color:var(--brick)} .auth-msg.ok{color:var(--green)}
+  .auth-note{font-size:12px;color:var(--muted);margin-top:16px;line-height:1.5}
+  /* header */
+  header.top{border-bottom:1px solid var(--line-strong);background:linear-gradient(180deg,#FBF7EE,#F4EFE3);position:sticky;top:0;z-index:30}
+  .top-inner{max-width:1080px;margin:0 auto;padding:14px 18px;display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap}
+  .brand{display:flex;flex-direction:column;gap:2px;margin-right:auto}
+  .brand .mark{display:flex;align-items:center;gap:10px}
+  .seal{width:32px;height:32px;border-radius:7px;background:var(--green);color:#F4EFE3;display:grid;place-items:center;font-family:'Space Grotesk';font-weight:700;font-size:13px;box-shadow:inset 0 0 0 2px rgba(244,239,227,.25)}
+  .brand h1{font-size:20px;margin:0;font-weight:700;letter-spacing:.02em}
+  .brand .sub{font-size:12px;color:var(--ink-soft);font-weight:500}
+  .ctrl{display:flex;flex-direction:column;gap:3px}
+  .ctrl label{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+  .ctrl input,.ctrl select{font-family:'Inter';font-size:13.5px;padding:7px 10px;border:1px solid var(--line-strong);border-radius:8px;background:var(--card);color:var(--ink);min-width:0}
+  .ctrl input:focus,.ctrl select:focus{outline:2px solid var(--green);border-color:var(--green)}
+  .icon-btns{display:flex;gap:6px;align-items:center}
+  .rolepill{font-family:'Space Grotesk';font-weight:600;font-size:11px;padding:6px 10px;border-radius:20px;white-space:nowrap}
+  .rolepill.editor{background:var(--green-soft);color:var(--green-deep);border:1px solid #BAD3BC}
+  .rolepill.viewer{background:#FBF1DC;color:#6B5212;border:1px solid #E6CE92}
+  nav.tabs{max-width:1080px;margin:0 auto;padding:0 10px;display:flex;gap:2px;overflow-x:auto;border-bottom:1px solid var(--line-strong);background:#F4EFE3;position:sticky;top:73px;z-index:29}
+  nav.tabs button{font-family:'Space Grotesk';font-weight:600;font-size:13.5px;white-space:nowrap;background:none;border:none;color:var(--ink-soft);padding:12px 14px;cursor:pointer;border-bottom:2.5px solid transparent;margin-bottom:-1px}
+  nav.tabs button:hover{color:var(--ink)}
+  nav.tabs button.active{color:var(--green-deep);border-bottom-color:var(--green)}
+  .btn{font-family:'Space Grotesk';font-weight:600;font-size:13.5px;cursor:pointer;border-radius:8px;padding:8px 14px;border:1px solid transparent;transition:.12s}
+  .btn-primary{background:var(--green);color:#F8F4EA}
+  .btn-primary:hover{background:var(--green-deep)}
+  .btn-ghost{background:transparent;border-color:var(--line-strong);color:var(--ink)}
+  .btn-ghost:hover{border-color:var(--green);color:var(--green)}
+  .btn-sm{padding:5px 9px;font-size:12px}
+  .btn-icon{background:transparent;border:1px solid var(--line-strong);border-radius:8px;color:var(--ink-soft);cursor:pointer;padding:7px 9px;font-size:12.5px;font-weight:600;font-family:'Space Grotesk'}
+  .btn-icon:hover{border-color:var(--green);color:var(--green)}
+  .x{background:none;border:none;color:var(--brick);cursor:pointer;font-size:13px;font-weight:700;padding:4px 6px;border-radius:6px}
+  .x:hover{background:var(--brick-soft)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
+  .card-pad{padding:18px}
+  .section-title{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:600;margin:0 0 12px}
+  table{border-collapse:collapse;width:100%;font-size:13.5px}
+  th{font-family:'Space Grotesk';font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-align:left;padding:9px 12px;border-bottom:1.5px solid var(--line-strong)}
+  th.num{text-align:right}
+  td{padding:9px 12px;border-bottom:1px solid var(--line)}
+  tr:last-child td{border-bottom:none}
+  tbody tr:hover{background:var(--card-2)}
+  tfoot td{border-top:1.5px solid var(--line-strong);font-weight:700;background:var(--card-2)}
+  .table-scroll{overflow-x:auto;border-radius:14px}
+  .form-row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+  .field{display:flex;flex-direction:column;gap:4px}
+  .field label{font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600}
+  .field input,.field select{font-family:'Inter';font-size:13.5px;padding:8px 10px;border:1px solid var(--line-strong);border-radius:8px;background:#fff;color:var(--ink)}
+  .field input.num{font-family:'JetBrains Mono'}
+  .field input:focus,.field select:focus{outline:2px solid var(--green);border-color:var(--green)}
+  .grow{flex:1 1 140px}
+  .stat-strip{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow)}
+  .stat .k{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;margin-bottom:6px}
+  .stat .v{font-family:'JetBrains Mono';font-weight:700;font-size:26px;line-height:1.1}
+  .stat.accent{background:linear-gradient(160deg,var(--green),var(--green-deep));border-color:var(--green-deep)}
+  .stat.accent .k{color:#CDE0CF}
+  .stat.accent .v{color:#FBF7EE}
+  .pos{color:var(--green)} .neg{color:var(--brick)}
+  .receipt{background:repeating-linear-gradient(0deg,#FCFAF4,#FCFAF4 27px,#F1EBDD 27px,#F1EBDD 28px);border:1px dashed var(--line-strong);border-radius:14px;padding:18px 20px;box-shadow:var(--shadow)}
+  .receipt .rr{display:flex;justify-content:space-between;align-items:baseline;padding:2px 0}
+  .receipt .lbl{color:var(--ink-soft);font-size:13px}
+  .receipt .val{font-family:'JetBrains Mono';font-weight:600}
+  .receipt .total{border-top:2px solid var(--line-strong);margin-top:8px;padding-top:8px}
+  .receipt .total .val{font-size:22px;font-weight:700;color:var(--brass)}
+  .mcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+  .mcard{border:1px solid var(--line);border-radius:14px;padding:14px 16px;background:var(--card);box-shadow:var(--shadow);border-left:4px solid var(--line-strong)}
+  .mcard.refund{border-left-color:var(--green)}
+  .mcard.owe{border-left-color:var(--brick)}
+  .mcard .nm{font-family:'Space Grotesk';font-weight:600;font-size:15px;display:flex;justify-content:space-between;align-items:center}
+  .mcard .tag{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;padding:2px 7px;border-radius:20px}
+  .tag.refund{background:var(--green-soft);color:var(--green-deep)}
+  .tag.owe{background:var(--brick-soft);color:var(--brick)}
+  .mcard .bal{font-family:'JetBrains Mono';font-weight:700;font-size:24px;margin:8px 0 6px}
+  .mcard .meta{font-size:12px;color:var(--ink-soft);display:flex;justify-content:space-between}
+  .mcard .meta .mono{font-size:12px}
+  .alert{display:flex;gap:12px;align-items:flex-start;border-radius:14px;padding:14px 16px;margin-bottom:16px;font-size:13.5px}
+  .alert.warn{background:#FBF1DC;border:1px solid #E6CE92;color:#6B5212}
+  .alert.ok{background:var(--green-soft);border:1px solid #BAD3BC;color:var(--green-deep)}
+  .alert b{font-family:'Space Grotesk'}
+  .meal-grid-wrap{overflow:auto;max-height:62vh;border:1px solid var(--line);border-radius:14px}
+  table.meal-grid{font-size:12.5px;min-width:max-content}
+  table.meal-grid th,table.meal-grid td{padding:5px 6px;border:1px solid var(--line);text-align:center;white-space:nowrap}
+  table.meal-grid thead th{position:sticky;top:0;background:var(--card-2);z-index:2}
+  table.meal-grid td.namecell,table.meal-grid th.namecell{position:sticky;left:0;background:var(--card-2);text-align:left;z-index:1;font-weight:600;font-family:'Space Grotesk';min-width:120px}
+  table.meal-grid thead th.namecell{z-index:3}
+  table.meal-grid input{width:38px;text-align:center;font-family:'JetBrains Mono';font-size:12.5px;border:1px solid transparent;background:transparent;border-radius:5px;padding:3px 0;color:var(--ink)}
+  table.meal-grid input:focus{outline:none;border-color:var(--green);background:#fff}
+  table.meal-grid input.has{background:var(--green-soft)}
+  table.meal-grid .totcol{background:var(--card-2);font-weight:700;font-family:'JetBrains Mono'}
+  table.meal-grid tfoot td{background:var(--card-2);font-weight:700;font-family:'JetBrains Mono'}
+  .weekend{background:#F6EEE0 !important}
+  .row-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+  .pill{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;background:var(--card-2);border:1px solid var(--line)}
+  .pill.food{background:var(--green-soft);color:var(--green-deep);border-color:#C4DBC6}
+  .pill.amenity{background:#EFEAFB;color:#4A3D7A;border-color:#D7CDF0}
+  .hint{font-size:12.5px;color:var(--ink-soft);margin-top:10px}
+  .empty{text-align:center;color:var(--muted);padding:30px 16px;font-size:14px}
+  .empty b{color:var(--ink-soft)}
+  .split{display:grid;grid-template-columns:1.3fr 1fr;gap:16px;align-items:start}
+  .toggle{display:inline-flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;user-select:none}
+  .toggle input{accent-color:var(--green);width:16px;height:16px}
+  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--green-deep);color:#F4EFE3;padding:10px 18px;border-radius:10px;font-size:13.5px;font-weight:600;opacity:0;pointer-events:none;transition:.25s;z-index:90;box-shadow:0 8px 24px rgba(0,0,0,.2)}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .view-banner{display:none;align-items:center;gap:10px;background:#FBF1DC;border:1px solid #E6CE92;color:#6B5212;border-radius:12px;padding:10px 14px;margin-bottom:16px;font-size:13px}
+  body.locked .view-banner{display:flex}
+  body.locked .edit-only{display:none !important}
+  #view input:disabled,#view select:disabled,#budgetInp:disabled{opacity:.7;cursor:default}
+  .center-msg{max-width:560px;margin:60px auto;text-align:center;padding:24px}
+  .center-msg code{background:var(--card-2);border:1px solid var(--line);padding:2px 6px;border-radius:6px;font-family:'JetBrains Mono';font-size:12.5px}
+  @media (max-width:760px){
+    .stat-strip{grid-template-columns:1fr 1fr}
+    .split{grid-template-columns:1fr}
+    .brand h1{font-size:18px}
+    nav.tabs{top:0;position:static}
+    header.top{position:static}
+  }
+  @media print{ header.top,nav.tabs,.row-actions,.no-print,.view-banner{display:none !important} body{background:#fff} .card,.stat{box-shadow:none} }
+</style>
+</head>
+<body>
+
+<!-- ============ AUTH SCREEN ============ -->
+<div id="auth" class="auth-screen" style="display:none">
+  <div class="auth-card">
+    <div class="seal">AZ</div>
+    <h1>Azkaban Meal</h1>
+    <p class="sub">Sign in to view or manage the mess accounts.</p>
+    <label for="lEmail">Email</label>
+    <input type="email" id="lEmail" autocomplete="username" placeholder="you@example.com">
+    <label for="lPass">Password</label>
+    <input type="password" id="lPass" autocomplete="current-password" placeholder="••••••••">
+    <button class="btn btn-primary" id="lBtn">Sign in</button>
+    <div class="auth-msg" id="lMsg"></div>
+    <p class="auth-note">Accounts are created by your mess admin. Forgot your password? Ask the admin to reset it from the Supabase dashboard.</p>
+  </div>
+</div>
+
+<!-- ============ CONFIG-MISSING SCREEN ============ -->
+<div id="needsConfig" class="center-msg" style="display:none">
+  <h2>Almost there</h2>
+  <p>This app isn't connected to a database yet. Open <code>index.html</code> and paste your Supabase <b>Project URL</b> and <b>anon key</b> into the two lines near the top of the script, then redeploy.</p>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="app" style="display:none">
+  <header class="top">
+    <div class="top-inner">
+      <div class="brand">
+        <div class="mark"><div class="seal">AZ</div><h1>Azkaban Meal</h1></div>
+        <div class="sub">Meal-rate accounting for a shared bachelor home</div>
+      </div>
+      <div class="ctrl">
+        <label for="monthSel">Month</label>
+        <input type="month" id="monthSel">
+      </div>
+      <div class="ctrl">
+        <label for="budgetInp">Budget / person</label>
+        <input type="number" id="budgetInp" min="0" step="50" style="width:120px" class="num">
+      </div>
+      <div class="ctrl">
+        <label>&nbsp;</label>
+        <div class="icon-btns">
+          <button class="btn-icon" id="btnExcel" title="Download an Excel workbook">Excel</button>
+          <button class="btn-icon" id="btnPrint" title="Print the settlement page">Print</button>
+          <button class="btn-icon" id="btnExport" title="Download backup (JSON)">Backup</button>
+          <span id="rolePill" class="rolepill viewer">Viewer</span>
+          <button class="btn-icon" id="btnSignout" title="Sign out">Sign out</button>
+        </div>
+      </div>
+    </div>
+    <nav class="tabs" id="tabs">
+      <button data-tab="overview" class="active">Overview</button>
+      <button data-tab="meals">Meal chart</button>
+      <button data-tab="bazar">Bazar &amp; amenities</button>
+      <button data-tab="deposits">Deposits</button>
+      <button data-tab="rates">Rate chart</button>
+      <button data-tab="members">Members</button>
+      <button data-tab="settle">Settlement</button>
+    </nav>
+  </header>
+  <div class="wrap">
+    <div class="view-banner"><span>👁️</span><div><b>View only.</b> You can see everything but can't change it. Two editors maintain the numbers; ask them if something needs fixing.</div></div>
+    <div id="view"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   1) CONFIG — paste your Supabase values here (two lines).
+   Find them in Supabase -> Project Settings -> API.
+   ============================================================ */
+const SUPABASE_URL = "https://YOUR-PROJECT.supabase.co";
+const SUPABASE_ANON_KEY = "YOUR-ANON-KEY";
+
+/* ============================================================ */
+let sb = null, S = {settings:{activeMonth:"",perPersonBudget:3000,lowBalance:1000},members:[],prices:[],deposits:[],expenses:[],meals:{}};
+let activeTab = "overview";
+let canEdit = false;
+let myEmail = "";
+
+function uid(){ return Math.random().toString(36).slice(2,9); }
+function thisMonth(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); }
+function round2(n){ return Math.round((n+Number.EPSILON)*100)/100; }
+const peso = n => "৳" + (round2(n)).toLocaleString("en-IN",{minimumFractionDigits:0,maximumFractionDigits:2});
+const money2 = n => "৳" + (round2(n)).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
+function daysInMonth(ym){ const [y,m]=ym.split("-").map(Number); return new Date(y,m,0).getDate(); }
+function dayDow(ym,d){ const [y,m]=ym.split("-").map(Number); return new Date(y,m-1,d).getDay(); }
+function dateStr(ym,d){ return ym+"-"+String(d).padStart(2,"0"); }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+let toastTimer; function toast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove("show"),2200); }
+function show(id,on){ document.getElementById(id).style.display = on?"":"none"; }
+
+/* ============ boot & auth ============ */
+(async function boot(){
+  if(SUPABASE_URL.includes("YOUR-PROJECT") || SUPABASE_ANON_KEY.includes("YOUR-ANON")){ show("needsConfig",true); return; }
+  sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const { data:{ session } } = await sb.auth.getSession();
+  if(session) startApp(session); else show("auth",true);
+  sb.auth.onAuthStateChange((_evt, sess)=>{
+    if(sess && document.getElementById("app").style.display==="none"){ startApp(sess); }
+    if(!sess){ show("app",false); show("auth",true); }
+  });
+  document.getElementById("lBtn").addEventListener("click", doLogin);
+  document.getElementById("lPass").addEventListener("keydown", e=>{ if(e.key==="Enter") doLogin(); });
+})();
+
+async function doLogin(){
+  const email=document.getElementById("lEmail").value.trim();
+  const password=document.getElementById("lPass").value;
+  const msg=document.getElementById("lMsg"); msg.className="auth-msg"; msg.textContent="Signing in…";
+  if(!email||!password){ msg.className="auth-msg err"; msg.textContent="Enter your email and password."; return; }
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  if(error){ msg.className="auth-msg err"; msg.textContent=error.message||"Could not sign in."; }
+  else { msg.className="auth-msg ok"; msg.textContent="Welcome."; }
+}
+async function doLogout(){ await sb.auth.signOut(); location.reload(); }
+
+async function startApp(session){
+  myEmail = session.user.email || "";
+  try{
+    const { data:ed } = await sb.from("editors").select("email").eq("email", myEmail).maybeSingle();
+    canEdit = !!ed;
+  }catch(e){ canEdit=false; }
+  show("auth",false); show("needsConfig",false); show("app",true);
+  const rp=document.getElementById("rolePill");
+  rp.textContent = (canEdit?"Editor · ":"Viewer · ")+myEmail;
+  rp.className = "rolepill "+(canEdit?"editor":"viewer");
+  await loadAll();
+  document.getElementById("monthSel").value = S.settings.activeMonth;
+  document.getElementById("budgetInp").value = S.settings.perPersonBudget;
+  bindChrome();
+  subscribeRealtime();
+  render();
+}
+
+/* ============ data layer ============ */
+async function loadAll(){
+  const [st,mem,pr,dep,exp,ml] = await Promise.all([
+    sb.from("settings").select("*").eq("id",1).maybeSingle(),
+    sb.from("members").select("*").order("sort",{ascending:true}),
+    sb.from("prices").select("*").order("category",{ascending:true}),
+    sb.from("deposits").select("*"),
+    sb.from("expenses").select("*"),
+    sb.from("meals").select("*"),
+  ]);
+  const s = st.data || {};
+  S.settings = { activeMonth: s.active_month || thisMonth(), perPersonBudget: Number(s.per_person_budget||3000), lowBalance: Number(s.low_balance||1000) };
+  S.members = (mem.data||[]).map(m=>({id:m.id,name:m.name,eatsAtNight:m.eats_at_night,sort:m.sort}));
+  S.prices  = (pr.data||[]).map(p=>({id:p.id,name:p.name,unit:p.unit,price:Number(p.price),category:p.category}));
+  S.deposits= (dep.data||[]).map(d=>({id:d.id,month:d.month,memberId:d.member_id,amount:Number(d.amount),date:d.date,note:d.note}));
+  S.expenses= (exp.data||[]).map(e=>({id:e.id,month:e.month,date:e.date,name:e.name,category:e.category,qty:Number(e.qty),unit:e.unit,unitPrice:Number(e.unit_price),total:Number(e.total),note:e.note}));
+  S.meals = {};
+  (ml.data||[]).forEach(r=>{ if(!S.meals[r.date]) S.meals[r.date]={}; S.meals[r.date][r.member_id]=Number(r.count); });
+}
+async function reload(){ await loadAll(); document.getElementById("budgetInp").value=S.settings.perPersonBudget; render(); }
+
+async function guard(promise, okMsg){
+  if(!canEdit){ toast("View only — ask an editor to make changes."); return false; }
+  try{ const { error } = await promise; if(error) throw error; if(okMsg) toast(okMsg); return true; }
+  catch(e){ toast("Could not save: "+(e.message||"error")); return false; }
+}
+
+/* realtime: any change anywhere reloads everyone */
+let rlTimer;
+function subscribeRealtime(){
+  sb.channel("azkaban-all")
+    .on("postgres_changes", { event:"*", schema:"public" }, ()=>{ clearTimeout(rlTimer); rlTimer=setTimeout(reload,350); })
+    .subscribe();
+}
+
+/* ============ compute ============ */
+function monthDeposits(){ return S.deposits.filter(d=>d.month===S.settings.activeMonth); }
+function monthExpenses(){ return S.expenses.filter(e=>e.month===S.settings.activeMonth); }
+function mealEntries(){ const out={}; const pre=S.settings.activeMonth+"-"; for(const k in S.meals){ if(k.startsWith(pre)) out[k]=S.meals[k]; } return out; }
+function compute(){
+  const exp=monthExpenses();
+  const foodTotal=exp.filter(e=>e.category==="food").reduce((a,e)=>a+(e.total||0),0);
+  const amenityTotal=exp.filter(e=>e.category==="amenity").reduce((a,e)=>a+(e.total||0),0);
+  const mealsByMember={}; let totalMeals=0; S.members.forEach(m=>mealsByMember[m.id]=0);
+  const me=mealEntries();
+  for(const date in me){ const row=me[date]; for(const mid in row){ const c=Number(row[mid])||0; if(mealsByMember[mid]!==undefined){ mealsByMember[mid]+=c; totalMeals+=c; } } }
+  const mealRate=totalMeals>0?foodTotal/totalMeals:0;
+  const nMembers=S.members.length||1; const amenityShare=amenityTotal/nMembers;
+  const depByMember={}; let totalDeposit=0; S.members.forEach(m=>depByMember[m.id]=0);
+  monthDeposits().forEach(d=>{ if(depByMember[d.memberId]!==undefined){ depByMember[d.memberId]+=Number(d.amount)||0; totalDeposit+=Number(d.amount)||0; }});
+  const rows=S.members.map(m=>{ const meals=mealsByMember[m.id]||0; const foodCost=meals*mealRate; const amen=amenityShare; const totalCost=foodCost+amen; const deposited=depByMember[m.id]||0; return {id:m.id,name:m.name,meals,foodCost,amen,totalCost,deposited,balance:deposited-totalCost}; });
+  const totalSpent=foodTotal+amenityTotal;
+  return {foodTotal,amenityTotal,totalSpent,totalMeals,mealRate,amenityShare,totalDeposit,inHand:totalDeposit-totalSpent,rows,nMembers};
+}
+
+/* ============ render ============ */
+function render(){
+  document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("active",b.dataset.tab===activeTab));
+  const v=document.getElementById("view");
+  const fns={overview:viewOverview,meals:viewMeals,bazar:viewBazar,deposits:viewDeposits,rates:viewRates,members:viewMembers,settle:viewSettle};
+  v.innerHTML=fns[activeTab]();
+  const wire={meals:wireMeals,bazar:wireBazar,deposits:wireDeposits,rates:wireRates,members:wireMembers};
+  if(wire[activeTab]) wire[activeTab]();
+  applyRole();
+}
+function applyRole(){
+  const locked=!canEdit;
+  document.body.classList.toggle("locked",locked);
+  const bi=document.getElementById("budgetInp"); if(bi) bi.disabled=locked;
+  document.querySelectorAll("#view input, #view select").forEach(el=>{ el.disabled=locked; });
+}
+
+/* ---- OVERVIEW ---- */
+function viewOverview(){
+  const c=compute(); const low=c.inHand<S.settings.lowBalance;
+  const monthLabel=new Date(S.settings.activeMonth+"-01").toLocaleString("en-US",{month:"long",year:"numeric"});
+  let alert="";
+  if(c.totalSpent===0&&c.totalDeposit===0) alert=`<div class="alert ok"><span>👋</span><div><b>Start here.</b> Record deposits, mark the meal chart each night, and log bazar trips. Everything else updates automatically and syncs to everyone.</div></div>`;
+  else if(low) alert=`<div class="alert warn"><span>⚠️</span><div><b>Cash in hand is low (${peso(c.inHand)}).</b> Time to collect the next installment. Open <b>Settlement</b> to show each member their balance.</div></div>`;
+  else alert=`<div class="alert ok"><span>✓</span><div><b>${peso(c.inHand)} in hand</b> for ${monthLabel}. Meal rate so far is <b>${money2(c.mealRate)}/meal</b> across ${c.totalMeals} meals.</div></div>`;
+  const cards=c.rows.map(r=>{ const refund=r.balance>=0;
+    return `<div class="mcard ${refund?'refund':'owe'}"><div class="nm">${esc(r.name)} <span class="tag ${refund?'refund':'owe'}">${refund?'Refund':'Owes'}</span></div>
+      <div class="bal ${refund?'pos':'neg'}">${refund?'+':'−'}${peso(Math.abs(r.balance))}</div>
+      <div class="meta"><span>Deposited <b class="mono">${peso(r.deposited)}</b></span><span>${r.meals} meals</span></div></div>`; }).join("");
+  return `${alert}
+  <div class="stat-strip">
+    <div class="stat"><div class="k">Collected</div><div class="v">${peso(c.totalDeposit)}</div></div>
+    <div class="stat"><div class="k">Spent (food + amenities)</div><div class="v">${peso(c.totalSpent)}</div></div>
+    <div class="stat accent"><div class="k">Cash in hand</div><div class="v">${peso(c.inHand)}</div></div>
+  </div>
+  <div class="split">
+    <div class="card card-pad"><p class="section-title">Members — running balance (${monthLabel})</p>
+      ${c.rows.length?`<div class="mcards">${cards}</div>`:`<div class="empty">No members yet. Add them in the <b>Members</b> tab.</div>`}
+      <p class="hint">A positive <b>Refund</b> balance is the member's own credit — money in but not yet eaten through. A negative <b>Owes</b> balance means they need to top up.</p></div>
+    <div>
+      <div class="receipt" style="margin-bottom:14px"><p class="section-title" style="margin-bottom:8px">Meal rate this month</p>
+        <div class="rr"><span class="lbl">Food bazar total</span><span class="val">${peso(c.foodTotal)}</span></div>
+        <div class="rr"><span class="lbl">÷ Total meals eaten</span><span class="val">${c.totalMeals}</span></div>
+        <div class="rr total"><span class="lbl">Meal rate</span><span class="val">${money2(c.mealRate)}</span></div></div>
+      <div class="card card-pad"><p class="section-title">Amenities (split equally)</p>
+        <div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--ink-soft);font-size:13px">Amenity total</span><span class="mono">${peso(c.amenityTotal)}</span></div>
+        <div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--ink-soft);font-size:13px">÷ ${c.nMembers} members</span><span class="mono">${peso(c.amenityShare)} each</span></div></div>
+    </div>
+  </div>`;
+}
+
+/* ---- MEAL CHART ---- */
+function viewMeals(){
+  const M=S.settings.activeMonth, nd=daysInMonth(M), me=mealEntries();
+  if(S.members.length===0) return `<div class="card card-pad"><div class="empty">Add members first in the <b>Members</b> tab.</div></div>`;
+  let head=`<th class="namecell">Member</th>`;
+  for(let d=1;d<=nd;d++){ const dow=dayDow(M,d); const we=(dow===5||dow===6); head+=`<th class="${we?'weekend':''}">${d}</th>`; }
+  head+=`<th class="totcol">Total</th>`;
+  let body=""; const colTot=new Array(nd+1).fill(0);
+  S.members.forEach(m=>{ let rowTot=0,cells="";
+    for(let d=1;d<=nd;d++){ const ds=dateStr(M,d); const val=(me[ds]&&me[ds][m.id]!==undefined)?me[ds][m.id]:""; const dow=dayDow(M,d); const we=(dow===5||dow===6);
+      if(val!==""){ rowTot+=Number(val)||0; colTot[d]+=Number(val)||0; }
+      cells+=`<td class="${we?'weekend':''}"><input class="${val!==''&&Number(val)>0?'has':''}" inputmode="numeric" data-date="${ds}" data-mid="${m.id}" value="${val}"></td>`; }
+    body+=`<tr><td class="namecell">${esc(m.name)}${m.eatsAtNight?'':' <span class="pill" style="font-size:9px">no dinner</span>'}</td>${cells}<td class="totcol">${rowTot}</td></tr>`; });
+  let foot=`<td class="namecell">Day total</td>`,grand=0;
+  for(let d=1;d<=nd;d++){ foot+=`<td>${colTot[d]||""}</td>`; grand+=colTot[d]; } foot+=`<td>${grand}</td>`;
+  return `<div class="row-actions edit-only">
+    <button class="btn btn-primary btn-sm" id="prefill">Prefill dinners (1 each)</button>
+    <button class="btn btn-ghost btn-sm" id="clearMonth">Clear month</button>
+    <span class="hint" style="margin:0"><b>1</b> = ate, <b>0</b> = absent, <b>2</b> = guest. Empty = not counted. Fri &amp; Sat shaded.</span></div>
+  <div class="meal-grid-wrap"><table class="meal-grid"><thead><tr>${head}</tr></thead><tbody>${body}</tbody><tfoot><tr>${foot}</tr></tfoot></table></div>`;
+}
+function wireMeals(){
+  document.querySelectorAll(".meal-grid input").forEach(inp=>inp.addEventListener("change", async e=>{
+    const {date,mid}=e.target.dataset; const v=e.target.value.trim();
+    if(v==="") await guard(sb.from("meals").delete().eq("date",date).eq("member_id",mid));
+    else await guard(sb.from("meals").upsert({date,member_id:mid,count:Math.max(0,Number(v)||0)},{onConflict:"date,member_id"}));
+    reload();
+  }));
+  const pf=document.getElementById("prefill");
+  if(pf) pf.addEventListener("click", async ()=>{
+    const M=S.settings.activeMonth, nd=daysInMonth(M), me=mealEntries(), rows=[];
+    for(let d=1;d<=nd;d++){ const ds=dateStr(M,d); S.members.forEach(m=>{ if(!(me[ds]&&me[ds][m.id]!==undefined)) rows.push({date:ds,member_id:m.id,count:m.eatsAtNight?1:0}); }); }
+    if(rows.length===0){ toast("Already filled"); return; }
+    const ok=await guard(sb.from("meals").upsert(rows,{onConflict:"date,member_id"}),"Filled empty cells"); if(ok) reload();
+  });
+  const cm=document.getElementById("clearMonth");
+  if(cm) cm.addEventListener("click", async ()=>{
+    if(!confirm("Clear ALL meal entries for "+S.settings.activeMonth+"?")) return;
+    const M=S.settings.activeMonth, nd=daysInMonth(M);
+    const ok=await guard(sb.from("meals").delete().gte("date",M+"-01").lte("date",dateStr(M,nd)),"Month cleared"); if(ok) reload();
+  });
+}
+
+/* ---- BAZAR ---- */
+function viewBazar(){
+  const exp=monthExpenses().slice().sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+  const opts=S.prices.map(p=>`<option value="${p.id}">${esc(p.name)} — ${peso(p.price)}/${esc(p.unit)} (${p.category})</option>`).join("");
+  const foodT=exp.filter(e=>e.category==="food").reduce((a,e)=>a+(e.total||0),0);
+  const amenT=exp.filter(e=>e.category==="amenity").reduce((a,e)=>a+(e.total||0),0);
+  const today=dateStr(S.settings.activeMonth,Math.min(new Date().getDate(),daysInMonth(S.settings.activeMonth)));
+  const rows=exp.length?exp.map(e=>`<tr><td class="mono" style="font-size:12px">${esc(e.date||"")}</td>
+    <td>${esc(e.name)} <span class="pill ${e.category}">${e.category}</span></td>
+    <td class="num">${e.qty} ${esc(e.unit||"")}</td><td class="num">${peso(e.unitPrice)}</td>
+    <td class="num"><b>${peso(e.total)}</b></td><td style="text-align:center"><button class="x edit-only" data-del="${e.id}">✕</button></td></tr>`).join("")
+    :`<tr><td colspan="6" class="empty">No purchases logged this month yet.</td></tr>`;
+  return `<div class="card card-pad edit-only" style="margin-bottom:16px"><p class="section-title">Log a purchase</p>
+    <div class="form-row">
+      <div class="field"><label>Date</label><input type="date" id="exDate" value="${today}"></div>
+      <div class="field grow"><label>Item</label><select id="exItem"><option value="">— pick from rate chart —</option>${opts}</select></div>
+      <div class="field"><label>Qty</label><input class="num" id="exQty" type="number" min="0" step="0.25" value="1" style="width:80px"></div>
+      <div class="field"><label>Unit price</label><input class="num" id="exPrice" type="number" min="0" step="0.5" style="width:100px"></div>
+      <div class="field"><label>Total</label><input class="num" id="exTotal" type="number" min="0" step="0.5" style="width:110px"></div>
+      <button class="btn btn-primary" id="exAdd">Add purchase</button></div>
+    <p class="hint">Pick an item to auto-fill its rate. For chicken, pick <b>Murgi (whole bird, 8 pcs)</b> and enter qty 1 per chicken day.</p></div>
+  <div class="stat-strip" style="grid-template-columns:1fr 1fr">
+    <div class="stat"><div class="k">Food bazar (meal pool)</div><div class="v">${peso(foodT)}</div></div>
+    <div class="stat"><div class="k">Amenities (split per head)</div><div class="v">${peso(amenT)}</div></div></div>
+  <div class="card table-scroll"><table><thead><tr><th>Date</th><th>Item</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Total</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+function wireBazar(){
+  const item=document.getElementById("exItem"),qty=document.getElementById("exQty"),price=document.getElementById("exPrice"),tot=document.getElementById("exTotal");
+  function calc(){ const q=Number(qty.value)||0,pr=Number(price.value)||0; if(q&&pr) tot.value=round2(q*pr); }
+  if(item){
+    item.addEventListener("change",()=>{ const p=S.prices.find(x=>x.id===item.value); if(p){ price.value=p.price; calc(); } });
+    qty.addEventListener("input",calc); price.addEventListener("input",calc);
+    document.getElementById("exAdd").addEventListener("click", async ()=>{
+      const p=S.prices.find(x=>x.id===item.value); if(!p){ toast("Pick an item first"); return; }
+      const q=Number(qty.value)||0,pr=Number(price.value)||0; let total=Number(tot.value)||(q*pr);
+      if(total<=0){ toast("Enter a total or qty × price"); return; }
+      const ok=await guard(sb.from("expenses").insert({month:S.settings.activeMonth,date:document.getElementById("exDate").value,name:p.name,category:p.category,qty:q,unit:p.unit,unit_price:pr,total:round2(total)}),"Purchase added"); if(ok) reload();
+    });
+  }
+  document.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click", async ()=>{ const ok=await guard(sb.from("expenses").delete().eq("id",b.dataset.del)); if(ok) reload(); }));
+}
+
+/* ---- DEPOSITS ---- */
+function viewDeposits(){
+  const deps=monthDeposits().slice().sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+  const memOpts=S.members.map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join("");
+  const budget=S.settings.perPersonBudget;
+  const byMem={}; S.members.forEach(m=>byMem[m.id]=0);
+  monthDeposits().forEach(d=>{ if(byMem[d.memberId]!==undefined) byMem[d.memberId]+=Number(d.amount)||0; });
+  const summary=S.members.map(m=>{ const paid=byMem[m.id]||0; const pct=budget>0?Math.min(100,Math.round(paid/budget*100)):0; const done=paid>=budget;
+    return `<tr><td>${esc(m.name)}</td><td class="num mono">${peso(paid)}</td><td class="num mono">${peso(budget)}</td>
+      <td style="min-width:130px"><div style="background:var(--line);border-radius:20px;height:8px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${done?'var(--green)':'var(--brass-soft)'}"></div></div></td>
+      <td class="num"><span class="pill ${done?'food':''}">${pct}%</span></td></tr>`; }).join("");
+  const today=dateStr(S.settings.activeMonth,Math.min(new Date().getDate(),daysInMonth(S.settings.activeMonth)));
+  const rows=deps.length?deps.map(d=>{ const m=S.members.find(x=>x.id===d.memberId);
+    return `<tr><td class="mono" style="font-size:12px">${esc(d.date||"")}</td><td>${esc(m?m.name:"—")}</td><td>${esc(d.note||"")}</td>
+      <td class="num"><b>${peso(d.amount)}</b></td><td style="text-align:center"><button class="x edit-only" data-del="${d.id}">✕</button></td></tr>`; }).join("")
+    :`<tr><td colspan="5" class="empty">No deposits this month.</td></tr>`;
+  return `<div class="card card-pad edit-only" style="margin-bottom:16px"><p class="section-title">Record a deposit (installment)</p>
+    <div class="form-row">
+      <div class="field"><label>Date</label><input type="date" id="dpDate" value="${today}"></div>
+      <div class="field grow"><label>Member</label><select id="dpMember">${memOpts}</select></div>
+      <div class="field"><label>Amount</label><input class="num" id="dpAmt" type="number" min="0" step="50" placeholder="1000" style="width:120px"></div>
+      <div class="field grow"><label>Note (optional)</label><input id="dpNote" placeholder="week 1"></div>
+      <button class="btn btn-primary" id="dpAdd">Add deposit</button></div></div>
+  <div class="split">
+    <div class="card table-scroll"><table><thead><tr><th>Date</th><th>Member</th><th>Note</th><th class="num">Amount</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="card table-scroll"><table><thead><tr><th>Member</th><th class="num">Paid</th><th class="num">Target</th><th>Progress</th><th class="num"></th></tr></thead><tbody>${summary}</tbody></table></div>
+  </div>`;
+}
+function wireDeposits(){
+  const add=document.getElementById("dpAdd");
+  if(add) add.addEventListener("click", async ()=>{
+    const mid=document.getElementById("dpMember").value; const amt=Number(document.getElementById("dpAmt").value)||0;
+    if(!mid){ toast("Pick a member"); return; } if(amt<=0){ toast("Enter an amount"); return; }
+    const ok=await guard(sb.from("deposits").insert({month:S.settings.activeMonth,member_id:mid,amount:amt,date:document.getElementById("dpDate").value,note:document.getElementById("dpNote").value.trim()}),"Deposit recorded"); if(ok) reload();
+  });
+  document.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click", async ()=>{ const ok=await guard(sb.from("deposits").delete().eq("id",b.dataset.del)); if(ok) reload(); }));
+}
+
+/* ---- RATE CHART ---- */
+function viewRates(){
+  const mk=(cat,title,note)=>{ const list=S.prices.filter(p=>p.category===cat);
+    const rows=list.length?list.map(p=>`<tr>
+        <td><input data-f="name" data-id="${p.id}" value="${esc(p.name)}" style="width:100%;border:1px solid transparent;background:transparent;font-family:'Inter';font-size:13.5px;padding:4px 6px;border-radius:6px"></td>
+        <td><input data-f="unit" data-id="${p.id}" value="${esc(p.unit)}" style="width:80px;border:1px solid transparent;background:transparent;font-size:13px;padding:4px 6px;border-radius:6px"></td>
+        <td class="num"><input data-f="price" data-id="${p.id}" type="number" min="0" step="0.5" value="${p.price}" class="num" style="width:100px;border:1px solid var(--line);background:#fff;font-family:'JetBrains Mono';padding:4px 6px;border-radius:6px"></td>
+        <td style="text-align:center"><button class="x edit-only" data-delp="${p.id}">✕</button></td></tr>`).join("")
+      :`<tr><td colspan="4" class="empty">No items.</td></tr>`;
+    return `<div class="card table-scroll" style="margin-bottom:16px">
+      <div class="card-pad" style="padding-bottom:6px"><p class="section-title" style="margin:0">${title}</p><p class="hint" style="margin:6px 0 0">${note}</p></div>
+      <table><thead><tr><th>Item</th><th>Unit</th><th class="num">Rate (BDT)</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+      <div class="card-pad edit-only" style="padding-top:12px"><button class="btn btn-ghost btn-sm" data-addcat="${cat}">+ Add ${cat} item</button></div></div>`; };
+  return `<div class="alert ok"><span>💡</span><div>This is your <b>live price declaration</b>. Edit a rate and it saves for everyone instantly — every new purchase pulls the current rate from here.</div></div>
+  ${mk("food","Food commodities","Counted into the meal-rate pool (chal, dal, mach, murgi, goru, shobji…).")}
+  ${mk("amenity","Amenities & household","Split equally per member (toothpaste, tissue, trashbags, gas…).")}`;
+}
+function wireRates(){
+  document.querySelectorAll("#view input[data-id]").forEach(inp=>inp.addEventListener("change", async e=>{
+    const p=S.prices.find(x=>x.id===e.target.dataset.id); if(!p) return; const f=e.target.dataset.f;
+    const patch = f==="price" ? {price:Math.max(0,Number(e.target.value)||0)} : {[f]:e.target.value.trim()};
+    const ok=await guard(sb.from("prices").update(patch).eq("id",p.id), f==="price"?(p.name+" updated"):null); if(ok) reload();
+  }));
+  document.querySelectorAll("[data-addcat]").forEach(b=>b.addEventListener("click", async ()=>{
+    if(!canEdit){ toast("View only"); return; }
+    const cat=b.dataset.addcat; const name=prompt("New "+cat+" item name:"); if(!name) return;
+    const unit=prompt("Unit (kg, piece, litre, pack, bird…):","kg")||"unit"; const price=Number(prompt("Current rate (BDT per "+unit+"):","0"))||0;
+    const ok=await guard(sb.from("prices").insert({name:name.trim(),unit:unit.trim(),price,category:cat}),"Item added"); if(ok) reload();
+  }));
+  document.querySelectorAll("[data-delp]").forEach(b=>b.addEventListener("click", async ()=>{ const ok=await guard(sb.from("prices").delete().eq("id",b.dataset.delp)); if(ok) reload(); }));
+}
+
+/* ---- MEMBERS ---- */
+function viewMembers(){
+  const rows=S.members.map(m=>`<tr>
+      <td><input data-mf="name" data-id="${m.id}" value="${esc(m.name)}" style="width:100%;border:1px solid transparent;background:transparent;font-family:'Inter';font-size:14px;padding:5px 7px;border-radius:6px"></td>
+      <td style="text-align:center"><label class="toggle"><input type="checkbox" data-mf="eats_at_night" data-id="${m.id}" ${m.eatsAtNight?'checked':''}> eats dinner</label></td>
+      <td style="text-align:center"><button class="x edit-only" data-delm="${m.id}">remove</button></td></tr>`).join("");
+  return `<div class="card card-pad edit-only" style="margin-bottom:16px"><p class="section-title">Add member</p>
+    <div class="form-row"><div class="field grow"><label>Name</label><input id="mName" placeholder="e.g. Rakib"></div>
+      <div class="field"><label>&nbsp;</label><label class="toggle" style="padding:8px 0"><input type="checkbox" id="mEats" checked> eats dinner</label></div>
+      <button class="btn btn-primary" id="mAdd">Add member</button></div></div>
+  <div class="card table-scroll"><table><thead><tr><th>Name</th><th style="text-align:center">Default dinner</th><th></th></tr></thead>
+    <tbody>${rows||`<tr><td colspan="3" class="empty">No members yet.</td></tr>`}</tbody></table></div>
+  <p class="hint">Untick "eats dinner" for the member who skips night meals — his cells default to 0 when you prefill.</p>`;
+}
+function wireMembers(){
+  const add=document.getElementById("mAdd");
+  if(add) add.addEventListener("click", async ()=>{
+    const name=document.getElementById("mName").value.trim(); if(!name){ toast("Enter a name"); return; }
+    const sort=(S.members.reduce((a,m)=>Math.max(a,m.sort||0),0))+1;
+    const ok=await guard(sb.from("members").insert({name,eats_at_night:document.getElementById("mEats").checked,sort}),"Member added"); if(ok) reload();
+  });
+  document.querySelectorAll("[data-mf]").forEach(inp=>inp.addEventListener("change", async e=>{
+    const id=e.target.dataset.id; const f=e.target.dataset.mf;
+    const patch = f==="eats_at_night" ? {eats_at_night:e.target.checked} : {name:e.target.value.trim()};
+    const ok=await guard(sb.from("members").update(patch).eq("id",id)); if(ok) reload();
+  }));
+  document.querySelectorAll("[data-delm]").forEach(b=>b.addEventListener("click", async ()=>{
+    if(!confirm("Remove this member? Their deposits and meals are removed too.")) return;
+    const ok=await guard(sb.from("members").delete().eq("id",b.dataset.delm)); if(ok) reload();
+  }));
+}
+
+/* ---- SETTLEMENT ---- */
+function viewSettle(){
+  const c=compute(); const monthLabel=new Date(S.settings.activeMonth+"-01").toLocaleString("en-US",{month:"long",year:"numeric"});
+  const rows=c.rows.map(r=>{ const refund=r.balance>=0;
+    return `<tr><td>${esc(r.name)}</td><td class="num">${r.meals}</td><td class="num">${peso(r.foodCost)}</td><td class="num">${peso(r.amen)}</td>
+      <td class="num"><b>${peso(r.totalCost)}</b></td><td class="num">${peso(r.deposited)}</td>
+      <td class="num ${refund?'pos':'neg'}"><b>${refund?'+':'−'}${peso(Math.abs(r.balance))}</b></td>
+      <td><span class="tag ${refund?'refund':'owe'}" style="font-size:10px">${refund?'Refund':'Collect'}</span></td></tr>`; }).join("");
+  const tCost=c.rows.reduce((a,r)=>a+r.totalCost,0),tDep=c.rows.reduce((a,r)=>a+r.deposited,0),tBal=c.rows.reduce((a,r)=>a+r.balance,0);
+  return `<div class="card card-pad" style="margin-bottom:16px"><p class="section-title">Settlement — ${monthLabel}</p>
+    <div class="receipt" style="background:none;border:none;padding:0">
+      <div class="rr"><span class="lbl">Meal rate</span><span class="val">${money2(c.mealRate)} / meal &nbsp;<span style="color:var(--muted);font-weight:400">(${peso(c.foodTotal)} ÷ ${c.totalMeals} meals)</span></span></div>
+      <div class="rr"><span class="lbl">Amenity share</span><span class="val">${peso(c.amenityShare)} / member &nbsp;<span style="color:var(--muted);font-weight:400">(${peso(c.amenityTotal)} ÷ ${c.nMembers})</span></span></div></div></div>
+  <div class="card table-scroll"><table>
+    <thead><tr><th>Member</th><th class="num">Meals</th><th class="num">Meal cost</th><th class="num">Amenity</th><th class="num">Total cost</th><th class="num">Deposited</th><th class="num">Balance</th><th>Action</th></tr></thead>
+    <tbody>${rows||`<tr><td colspan="8" class="empty">No members.</td></tr>`}</tbody>
+    <tfoot><tr><td>Total</td><td class="num">${c.totalMeals}</td><td class="num">${peso(c.foodTotal)}</td><td class="num">${peso(c.amenityTotal)}</td><td class="num">${peso(tCost)}</td><td class="num">${peso(tDep)}</td><td class="num ${tBal>=0?'pos':'neg'}">${tBal>=0?'+':'−'}${peso(Math.abs(tBal))}</td><td></td></tr></tfoot></table></div>
+  <div class="card card-pad" style="margin-top:16px"><p class="section-title">How to read this</p>
+    <p style="margin:0">Each person is charged only for the meals they actually ate (meals × meal rate) plus an equal amenity share. An absent member's unused deposit shows as a positive <b>Refund</b> balance — their own credit, never lost.</p></div>`;
+}
+
+/* ---- Excel export ---- */
+function exportExcel(){
+  if(!window.XLSX){ toast("Excel tool still loading — try again"); return; }
+  const c=compute(); const M=S.settings.activeMonth, nd=daysInMonth(M), me=mealEntries(); const wb=XLSX.utils.book_new();
+  const summary=[["Azkaban Meal — monthly report"],["Month",M],[],["Collected (deposits)",round2(c.totalDeposit)],["Food spent",round2(c.foodTotal)],["Amenities spent",round2(c.amenityTotal)],["Total spent",round2(c.totalSpent)],["Cash in hand",round2(c.inHand)],[],["Total meals",c.totalMeals],["Meal rate (per meal)",round2(c.mealRate)],["Amenity share (per member)",round2(c.amenityShare)]];
+  const ws0=XLSX.utils.aoa_to_sheet(summary); ws0["!cols"]=[{wch:28},{wch:16}]; XLSX.utils.book_append_sheet(wb,ws0,"Summary");
+  const set=[["Member","Meals","Meal cost","Amenity share","Total cost","Deposited","Balance","Status"]];
+  c.rows.forEach(r=>set.push([r.name,r.meals,round2(r.foodCost),round2(r.amen),round2(r.totalCost),round2(r.deposited),round2(r.balance),r.balance>=0?"Refund":"Collect"]));
+  set.push(["Total",c.totalMeals,round2(c.foodTotal),round2(c.amenityTotal),round2(c.rows.reduce((a,r)=>a+r.totalCost,0)),round2(c.rows.reduce((a,r)=>a+r.deposited,0)),round2(c.rows.reduce((a,r)=>a+r.balance,0)),""]);
+  const ws1=XLSX.utils.aoa_to_sheet(set); ws1["!cols"]=[{wch:18},{wch:7},{wch:11},{wch:13},{wch:11},{wch:11},{wch:11},{wch:9}]; XLSX.utils.book_append_sheet(wb,ws1,"Settlement");
+  const dep=[["Date","Member","Note","Amount"]];
+  monthDeposits().slice().sort((a,b)=>(a.date||"").localeCompare(b.date||"")).forEach(d=>{ const m=S.members.find(x=>x.id===d.memberId); dep.push([d.date||"",m?m.name:"—",d.note||"",round2(d.amount)]); });
+  const ws2=XLSX.utils.aoa_to_sheet(dep); ws2["!cols"]=[{wch:12},{wch:18},{wch:18},{wch:11}]; XLSX.utils.book_append_sheet(wb,ws2,"Deposits");
+  const baz=[["Date","Item","Category","Qty","Unit","Unit price","Total"]];
+  monthExpenses().slice().sort((a,b)=>(a.date||"").localeCompare(b.date||"")).forEach(e=>baz.push([e.date||"",e.name,e.category,e.qty,e.unit||"",round2(e.unitPrice),round2(e.total)]));
+  const ws3=XLSX.utils.aoa_to_sheet(baz); ws3["!cols"]=[{wch:12},{wch:24},{wch:10},{wch:7},{wch:8},{wch:11},{wch:11}]; XLSX.utils.book_append_sheet(wb,ws3,"Bazar & amenities");
+  const head=["Member"]; for(let d=1;d<=nd;d++) head.push(d); head.push("Total"); const grid=[head];
+  S.members.forEach(m=>{ const row=[m.name]; let t=0; for(let d=1;d<=nd;d++){ const ds=dateStr(M,d); const v=(me[ds]&&me[ds][m.id]!==undefined)?Number(me[ds][m.id]):""; if(v!=="") t+=v; row.push(v); } row.push(t); grid.push(row); });
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(grid),"Meal chart");
+  const rate=[["Item","Category","Unit","Rate (BDT)"]]; S.prices.forEach(p=>rate.push([p.name,p.category,p.unit,round2(p.price)]));
+  const ws5=XLSX.utils.aoa_to_sheet(rate); ws5["!cols"]=[{wch:26},{wch:10},{wch:8},{wch:11}]; XLSX.utils.book_append_sheet(wb,ws5,"Rate chart");
+  XLSX.writeFile(wb,"azkaban-meal-"+M+".xlsx"); toast("Excel workbook downloaded");
+}
+
+/* ---- chrome ---- */
+function bindChrome(){
+  document.getElementById("tabs").addEventListener("click",e=>{ const b=e.target.closest("button[data-tab]"); if(!b) return; activeTab=b.dataset.tab; render(); });
+  document.getElementById("monthSel").addEventListener("change", async e=>{ const v=e.target.value||thisMonth(); const ok=await guard(sb.from("settings").update({active_month:v}).eq("id",1)); if(ok){ S.settings.activeMonth=v; reload(); } else { e.target.value=S.settings.activeMonth; } });
+  document.getElementById("budgetInp").addEventListener("change", async e=>{ const v=Math.max(0,Number(e.target.value)||0); const ok=await guard(sb.from("settings").update({per_person_budget:v}).eq("id",1),"Budget updated"); if(ok){ S.settings.perPersonBudget=v; reload(); } });
+  document.getElementById("btnExcel").addEventListener("click",exportExcel);
+  document.getElementById("btnPrint").addEventListener("click",()=>{ activeTab="settle"; render(); setTimeout(()=>window.print(),150); });
+  document.getElementById("btnExport").addEventListener("click",()=>{ const blob=new Blob([JSON.stringify(S,null,2)],{type:"application/json"}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="azkaban-meal-backup-"+S.settings.activeMonth+".json"; a.click(); URL.revokeObjectURL(a.href); toast("Backup downloaded"); });
+  document.getElementById("btnSignout").addEventListener("click",doLogout);
+}
+</script>
+</body>
+</html>
