@@ -1,0 +1,15 @@
+{
+  "name": "Azkaban Meal",
+  "short_name": "Azkaban",
+  "description": "Meal-rate accounting for a shared bachelor home",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F4EFE3",
+  "theme_color": "#1E5B3C",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
