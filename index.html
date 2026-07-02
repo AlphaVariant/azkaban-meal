@@ -218,6 +218,7 @@
       <button data-tab="overview" class="active">Overview</button>
       <button data-tab="meals">Meal chart</button>
       <button data-tab="bazar">Bazar &amp; amenities</button>
+      <button data-tab="stockup">House Stock Up</button>
       <button data-tab="deposits">Deposits</button>
       <button data-tab="rates">Rate chart</button>
       <button data-tab="members">Members</button>
@@ -241,7 +242,7 @@ const SUPABASE_URL = "https://mmadhdsahntmthanzabh.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_MYxNgVtaEsxvucexkDdMpA_LTBHNYiz";
 
 /* ============================================================ */
-let sb = null, S = {settings:{activeMonth:"",perPersonBudget:3000,lowBalance:1000},members:[],prices:[],deposits:[],expenses:[],meals:{}};
+let sb = null, S = {settings:{activeMonth:"",perPersonBudget:3000,lowBalance:1000},members:[],prices:[],deposits:[],expenses:[],stockup:[],meals:{}};
 let activeTab = "overview";
 let canEdit = false;
 let myEmail = "";
@@ -303,13 +304,14 @@ async function startApp(session){
 
 /* ============ data layer ============ */
 async function loadAll(){
-  const [st,mem,pr,dep,exp,ml] = await Promise.all([
+  const [st,mem,pr,dep,exp,ml,stk] = await Promise.all([
     sb.from("settings").select("*").eq("id",1).maybeSingle(),
     sb.from("members").select("*").order("sort",{ascending:true}),
     sb.from("prices").select("*").order("category",{ascending:true}),
     sb.from("deposits").select("*"),
     sb.from("expenses").select("*"),
     sb.from("meals").select("*"),
+    sb.from("stockup").select("*").order("created_at",{ascending:true}),
   ]);
   const s = st.data || {};
   S.settings = { activeMonth: s.active_month || thisMonth(), perPersonBudget: Number(s.per_person_budget||3000), lowBalance: Number(s.low_balance||1000) };
@@ -319,6 +321,7 @@ async function loadAll(){
   S.expenses= (exp.data||[]).map(e=>({id:e.id,month:e.month,date:e.date,name:e.name,category:e.category,qty:Number(e.qty),unit:e.unit,unitPrice:Number(e.unit_price),total:Number(e.total),note:e.note}));
   S.meals = {};
   (ml.data||[]).forEach(r=>{ if(!S.meals[r.date]) S.meals[r.date]={}; S.meals[r.date][r.member_id]=Number(r.count); });
+  S.stockup = (stk.data||[]).map(r=>({id:r.id,name:r.name,category:r.category,unit:r.unit,qty:Number(r.qty),estPrice:Number(r.est_price),bought:r.bought,note:r.note}));
 }
 async function reload(){ await loadAll(); document.getElementById("budgetInp").value=S.settings.perPersonBudget; render(); }
 
@@ -360,9 +363,9 @@ function compute(){
 function render(){
   document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("active",b.dataset.tab===activeTab));
   const v=document.getElementById("view");
-  const fns={overview:viewOverview,meals:viewMeals,bazar:viewBazar,deposits:viewDeposits,rates:viewRates,members:viewMembers,settle:viewSettle};
+  const fns={overview:viewOverview,meals:viewMeals,bazar:viewBazar,stockup:viewStockup,deposits:viewDeposits,rates:viewRates,members:viewMembers,settle:viewSettle};
   v.innerHTML=fns[activeTab]();
-  const wire={meals:wireMeals,bazar:wireBazar,deposits:wireDeposits,rates:wireRates,members:wireMembers};
+  const wire={meals:wireMeals,bazar:wireBazar,stockup:wireStockup,deposits:wireDeposits,rates:wireRates,members:wireMembers};
   if(wire[activeTab]) wire[activeTab]();
   applyRole();
 }
@@ -490,6 +493,61 @@ function wireBazar(){
     });
   }
   document.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click", async ()=>{ const ok=await guard(sb.from("expenses").delete().eq("id",b.dataset.del)); if(ok) reload(); }));
+}
+
+/* ---- HOUSE STOCK UP (needs / shopping list) ---- */
+function viewStockup(){
+  const opts=S.prices.map(p=>`<option value="${p.id}">${esc(p.name)} — ${peso(p.price)}/${esc(p.unit)} (${p.category})</option>`).join("");
+  const items=S.stockup.slice().sort((a,b)=>(a.bought===b.bought?0:(a.bought?1:-1)));
+  const neededFood=S.stockup.filter(i=>!i.bought&&i.category==="food").reduce((a,i)=>a+i.qty*i.estPrice,0);
+  const neededAmen=S.stockup.filter(i=>!i.bought&&i.category==="amenity").reduce((a,i)=>a+i.qty*i.estPrice,0);
+  const rows=items.length?items.map(i=>{ const amt=i.qty*i.estPrice;
+    return `<tr style="${i.bought?'opacity:.55':''}">
+      <td><label class="toggle"><input type="checkbox" data-buy="${i.id}" ${i.bought?'checked':''}> <span style="${i.bought?'text-decoration:line-through':''}">${esc(i.name)}</span></label> <span class="pill ${i.category}">${i.category}</span></td>
+      <td class="num"><input class="num" type="number" min="0" step="0.25" value="${i.qty}" data-qty="${i.id}" style="width:70px;border:1px solid var(--line);background:#fff;font-family:'JetBrains Mono';padding:4px 6px;border-radius:6px"> ${esc(i.unit||"")}</td>
+      <td class="num">${peso(i.estPrice)}</td>
+      <td class="num"><b>${peso(amt)}</b></td>
+      <td style="text-align:center;white-space:nowrap"><button class="btn btn-ghost btn-sm edit-only" data-log="${i.id}" title="Record this as a real purchase in Bazar">Log purchase</button> <button class="x edit-only" data-delstk="${i.id}">✕</button></td></tr>`;
+  }).join(""):`<tr><td colspan="5" class="empty">Nothing on the list yet. Add what the house needs to buy.</td></tr>`;
+  return `<div class="card card-pad edit-only" style="margin-bottom:16px"><p class="section-title">Add something the house needs</p>
+    <div class="form-row">
+      <div class="field grow"><label>Item</label><select id="stItem"><option value="">— pick from rate chart —</option>${opts}</select></div>
+      <div class="field"><label>Qty</label><input class="num" id="stQty" type="number" min="0" step="0.25" value="1" style="width:90px"></div>
+      <div class="field"><label>Estimated</label><input class="num" id="stAmt" readonly style="width:120px;background:var(--card-2)"></div>
+      <button class="btn btn-primary" id="stAdd">Add to list</button></div>
+    <p class="hint">Pick an item and quantity — the estimated cost fills in from the current rate chart. Tick the box when it's bought, or hit <b>Log purchase</b> to move it into Bazar so it counts in the settlement.</p></div>
+  <div class="stat-strip" style="grid-template-columns:repeat(3,1fr)">
+    <div class="stat"><div class="k">Food still needed</div><div class="v">${peso(neededFood)}</div></div>
+    <div class="stat"><div class="k">Amenities still needed</div><div class="v">${peso(neededAmen)}</div></div>
+    <div class="stat accent"><div class="k">Total to buy</div><div class="v">${peso(neededFood+neededAmen)}</div></div></div>
+  <div class="card table-scroll"><table>
+    <thead><tr><th>Item (tick when bought)</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Estimated</th><th></th></tr></thead>
+    <tbody>${rows}</tbody></table></div>`;
+}
+function wireStockup(){
+  const item=document.getElementById("stItem"),qty=document.getElementById("stQty"),amt=document.getElementById("stAmt");
+  function calc(){ const p=S.prices.find(x=>x.id===item.value); const q=Number(qty.value)||0; amt.value=p?round2(q*Number(p.price)):""; }
+  if(item){ item.addEventListener("change",calc); qty.addEventListener("input",calc);
+    document.getElementById("stAdd").addEventListener("click", async ()=>{
+      const p=S.prices.find(x=>x.id===item.value); if(!p){ toast("Pick an item first"); return; }
+      const q=Number(qty.value)||0; if(q<=0){ toast("Enter a quantity"); return; }
+      const ok=await guard(sb.from("stockup").insert({name:p.name,category:p.category,unit:p.unit,qty:q,est_price:Number(p.price)}),"Added to list"); if(ok) reload();
+    });
+  }
+  document.querySelectorAll("[data-buy]").forEach(cb=>cb.addEventListener("change", async e=>{ const ok=await guard(sb.from("stockup").update({bought:e.target.checked}).eq("id",e.target.dataset.buy)); if(ok) reload(); }));
+  document.querySelectorAll("[data-qty]").forEach(inp=>inp.addEventListener("change", async e=>{ const ok=await guard(sb.from("stockup").update({qty:Math.max(0,Number(e.target.value)||0)}).eq("id",e.target.dataset.qty)); if(ok) reload(); }));
+  document.querySelectorAll("[data-delstk]").forEach(b=>b.addEventListener("click", async ()=>{ const ok=await guard(sb.from("stockup").delete().eq("id",b.dataset.delstk)); if(ok) reload(); }));
+  document.querySelectorAll("[data-log]").forEach(b=>b.addEventListener("click", async ()=>{
+    if(!canEdit){ toast("View only"); return; }
+    const it=S.stockup.find(x=>x.id===b.dataset.log); if(!it) return;
+    const today=dateStr(S.settings.activeMonth,Math.min(new Date().getDate(),daysInMonth(S.settings.activeMonth)));
+    try{
+      const r1=await sb.from("expenses").insert({month:S.settings.activeMonth,date:today,name:it.name,category:it.category,qty:it.qty,unit:it.unit,unit_price:it.estPrice,total:round2(it.qty*it.estPrice)});
+      if(r1.error) throw r1.error;
+      const r2=await sb.from("stockup").delete().eq("id",it.id); if(r2.error) throw r2.error;
+      toast("Logged to Bazar"); reload();
+    }catch(e){ toast("Could not log: "+(e.message||"error")); }
+  }));
 }
 
 /* ---- DEPOSITS ---- */
